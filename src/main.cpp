@@ -3,14 +3,7 @@
 
 // libs comunidade
 #include "NextionControl.h"
-#ifndef ESP32
-#error This code is intended to run on the ESP32 platform! Please check your Tools->Board setting.
-#endif
-
-// These define's must be placed at the beginning before #include "_TIMERINTERRUPT_LOGLEVEL_.h"
-// _TIMERINTERRUPT_LOGLEVEL_ from 0 to 4
 #define _TIMERINTERRUPT_LOGLEVEL_ 4
-
 #include "ESP32_New_TimerInterrupt.h"
 
 // definições locais
@@ -30,7 +23,7 @@ uint8_t CTAddress[] = {0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x0F};     // MAC da centra
 uint8_t PDMAddress[] = {0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x1F};    // MAC PDM
 uint8_t PainelAddress[] = {0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x2F}; // MAC do Painel
 
-#define BTstop 35
+#define BTstop 25
 #define SensFreio 36
 #define ledERRO 32
 #define ledSinal 33
@@ -40,7 +33,7 @@ uint8_t PainelAddress[] = {0x0A, 0x1B, 0x2C, 0x3D, 0x4E, 0x2F}; // MAC do Painel
 uint8_t EstadoLuz = 0;
 struct_Canais MyPDMCanais;
 
-ESP32Timer RearmaBicosBobinas;
+ESP32Timer RearmaBicosBobinas(0);
 
 void setPins()
 {
@@ -63,7 +56,7 @@ void SetledSinal(bool a)
   ledcWrite(1, a * 180);
 }
 
-bool IRAM_ATTR rearma(void * timerNo)
+bool IRAM_ATTR rearma(void *timerNo)
 {
   MyPDMCanais.canal = false;
   MyPDMCanais.id = 7;
@@ -71,6 +64,9 @@ bool IRAM_ATTR rearma(void * timerNo)
   MyPDMCanais.id = 5;
   ESPNOWSend(PDMAddress, &MyPDMCanais);
   RearmaBicosBobinas.stopTimer();
+  SetledERRO(0);
+  SetledSinal(0);
+  return true;
 }
 
 void setup()
@@ -80,10 +76,10 @@ void setup()
 #endif
   setPins();
 
-  RearmaBicosBobinas.attachInterrupt(1E6, rearma);
+  RearmaBicosBobinas.attachInterruptInterval(1E6, rearma);
   RearmaBicosBobinas.stopTimer();
 
-      setupESPNOW(PainelAddress, DadosSensores, ConfigSenores, canais);
+  setupESPNOW(PainelAddress, DadosSensores, ConfigSenores, canais);
   AddPear(PDMAddress);
   for (int16_t i = 0; i < numFunLoop; i++)
   {
@@ -130,13 +126,16 @@ void loop()
       ESPNOWSend(PDMAddress, &MyPDMCanais);
       EstadoLuz = Estado;
     }
-    if (!BTstop)
+    if (!digitalRead(BTstop))
     {
+      Serial.println("BTStop");
       MyPDMCanais.canal = false;
       MyPDMCanais.id = 7;
       ESPNOWSend(PDMAddress, &MyPDMCanais);
       MyPDMCanais.id = 5;
       ESPNOWSend(PDMAddress, &MyPDMCanais);
+      SetledERRO(1);
+      SetledSinal(1);
       RearmaBicosBobinas.restartTimer();
     }
     tempo[4] += 10;
